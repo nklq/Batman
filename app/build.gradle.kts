@@ -41,6 +41,7 @@ android {
 
 dependencies {
 
+    implementation("com.google.accompanist:accompanist-permissions:0.32.0")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
