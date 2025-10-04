@@ -1,35 +1,46 @@
 package com.example.batman
 
-import android.Manifest // Do obsługi uprawnień (chociaż teraz nie używamy, dobrze mieć)
+import android.Manifest
+import android.content.Context
+import android.media.MediaRecorder
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.background // Do koloru tła
-import androidx.compose.foundation.layout.* // Do Column, Row, Spacer, fillMaxSize, padding
-import androidx.compose.foundation.shape.RoundedCornerShape // Do kształtu Card
-import androidx.compose.material.icons.Icons // Do użycia ikon
-import androidx.compose.material.icons.automirrored.filled.List // Do ikon na dole
-import androidx.compose.material.icons.filled.Menu // Do ikon na górze i PowerButton (jako placeholder)
-import androidx.compose.material3.* // Do Scaffold, Card, Text, Button, TopAppBar, Icon
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue // Do obsługi stanu (by remember)
-import androidx.compose.runtime.mutableStateOf // Do obsługi stanu
-import androidx.compose.runtime.remember // Do obsługi stanu
-import androidx.compose.runtime.setValue // Do obsługi stanu (by remember)
-import androidx.compose.ui.Alignment // Do wyrównania
-import androidx.compose.ui.Modifier // Do modyfikatorów
-import androidx.compose.ui.graphics.Color // Do użycia kolorów
-import androidx.compose.ui.text.font.FontWeight // Do czcionek
-import androidx.compose.ui.tooling.preview.Preview // Do podglądu
-import androidx.compose.ui.unit.dp // Do wymiarów
-import androidx.compose.ui.unit.sp // Do wielkości czcionek
-import com.example.batman.ui.theme.BatmanTheme // Twój pakiet motywu
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.batman.ui.theme.BatmanTheme
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.isGranted
+import com.google.accompanist.permissions.rememberPermissionState
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.asRequestBody
+import java.io.File
 
-val PrimaryDarkBlue = Color(0xFF0F1A3B) // Tło
-val CardBackground = Color(0xFF1E2746)  // Tło karty
-val StatusActiveColor = Color(0xFF00C853) // Zielony
-val StatusInactiveColor = Color.DarkGray   // Szary
+val PrimaryDarkBlue = Color(0xFF0F1A3B)
+val CardBackground = Color(0xFF1E2746)
+val StatusActiveColor = Color(0xFF00C853)
+val StatusInactiveColor = Color.DarkGray
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -44,24 +55,74 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun RecordingAppUIScheme() {
     var isRecording by remember { mutableStateOf(false) }
     var statusText by remember { mutableStateOf("Naciśnij START, aby nagrywać co 5 sekund") }
     var currentTime by remember { mutableStateOf("00:00:00") }
+    val context = LocalContext.current
+    var showFileList by remember { mutableStateOf(false) }
+    var fileList by remember { mutableStateOf(listOf<String>()) }
 
-    Scaffold( /* ... */ ) { paddingValues ->
+    val recordAudioPermission = rememberPermissionState(Manifest.permission.RECORD_AUDIO)
+    var mediaRecorder by remember { mutableStateOf<MediaRecorder?>(null) }
+    val coroutineScope = rememberCoroutineScope()
 
+    LaunchedEffect(isRecording) {
+        if (isRecording) {
+            while (isActive) {
+                val fileName = "nagranie_${System.currentTimeMillis()}.m4a"
+                val file = File(context.filesDir, fileName)
+                mediaRecorder = MediaRecorder(context).apply {
+                    setAudioSource(MediaRecorder.AudioSource.MIC)
+                    setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                    setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                    setOutputFile(file.absolutePath)
+                    prepare()
+                    start()
+                }
+                delay(5000)
+                mediaRecorder?.apply {
+                    stop()
+                    release()
+                }
+                mediaRecorder = null
+
+                coroutineScope.launch {
+                    try {
+                        val requestFile = file.asRequestBody("audio/m4a".toMediaTypeOrNull())
+                        val body = MultipartBody.Part.createFormData("file", file.name, requestFile)
+                        RetrofitClient.instance.uploadRecording(body)
+                        Log.d("FileUpload", "File uploaded successfully: ${file.name}")
+                    } catch (e: Exception) {
+                        Log.e("FileUpload", "Error uploading file: ${e.message}")
+                    }
+                }
+            }
+        } else {
+            mediaRecorder?.apply {
+                stop()
+                release()
+            }
+            mediaRecorder = null
+        }
+    }
+
+    if (showFileList) {
+        FileListScreen(files = fileList, onDismiss = { showFileList = false })
+    }
+
+    Scaffold { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
                 .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center // Wyśrodkuj zawartość na ekranie
+            verticalArrangement = Arrangement.Center
         ) {
 
-            // 1. GÓRNY PASEK STATUSU
             StatusDisplayCard(
                 status = statusText,
                 time = currentTime,
@@ -70,25 +131,57 @@ fun RecordingAppUIScheme() {
 
             Spacer(modifier = Modifier.height(64.dp))
 
-            // 2. DUŻY PRZYCISK WŁĄCZAJĄCY/WYŁĄCZAJĄCY
             PowerSwitchButton(
                 isRecording = isRecording,
                 onClick = {
-                    // Logika przełączania stanu
-                    isRecording = !isRecording
-                    statusText = if (isRecording) "Nagrywanie (Co 5s)" else "Gotowy do STARTU"
-                    // TUTAJ BĘDZIE POŁĄCZENIE Z LOGIKĄ OSOBY 2
+                    if (recordAudioPermission.status.isGranted) {
+                        isRecording = !isRecording
+                        statusText = if (isRecording) "Nagrywanie (Co 5s)" else "Gotowy do STARTU"
+                    } else {
+                        recordAudioPermission.launchPermissionRequest()
+                    }
                 }
             )
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // 3. DOLNY PRZYCISK POWIADOMIEŃ/REJESTRÓW
             NotificationLogButton(
-                onClick = { /* Przejście do listy nagrań/powiadomień */ }
+                onClick = {
+                    fileList = context.filesDir.listFiles()
+                        ?.map { it.name }
+                        ?.sortedDescending()
+                        ?: listOf()
+                    showFileList = true
+                }
             )
         }
     }
+}
+
+@Composable
+fun FileListScreen(files: List<String>, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Zapisane pliki") },
+        text = {
+            Box(modifier = Modifier.height(300.dp)) {
+                if (files.isEmpty()) {
+                    Text("Brak zapisanych plików.")
+                } else {
+                    LazyColumn {
+                        items(files) { fileName ->
+                            Text(fileName, modifier = Modifier.padding(vertical = 4.dp))
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss) {
+                Text("OK")
+            }
+        }
+    )
 }
 
 @Composable
@@ -102,17 +195,13 @@ fun StatusDisplayCard(status: String, time: String, isActive: Boolean) {
             modifier = Modifier.padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Status (Connected / Nieaktywny)
             Text(
                 text = status.uppercase(),
                 color = if (isActive) StatusActiveColor else StatusInactiveColor,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold
             )
-
             Spacer(modifier = Modifier.height(8.dp))
-
-            // Czas
             Text(
                 text = time,
                 color = Color.White,
@@ -127,15 +216,13 @@ fun StatusDisplayCard(status: String, time: String, isActive: Boolean) {
 fun PowerSwitchButton(isRecording: Boolean, onClick: () -> Unit) {
     Button(
         onClick = onClick,
-        shape = androidx.compose.foundation.shape.CircleShape,
+        shape = CircleShape,
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (isRecording) Color.Red else StatusActiveColor // Czerwony dla STOP
+            containerColor = if (isRecording) Color.Red else StatusActiveColor
         ),
         contentPadding = PaddingValues(0.dp),
-        modifier = Modifier.size(160.dp) // Duża wielkość
+        modifier = Modifier.size(160.dp)
     ) {
-        // Użyj standardowej ikony "Power" lub podobnej, jeśli dostępna.
-        // Na razie używamy Placeholdera z menu.
         Text(
             text = if (isRecording) "STOP" else "START",
             color = Color.White,
@@ -160,7 +247,6 @@ fun NotificationLogButton(onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
-            // Ikona listy
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.List,
                 contentDescription = "Powiadomienia",
