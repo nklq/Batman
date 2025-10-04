@@ -25,8 +25,6 @@ import androidx.compose.ui.unit.dp // Do wymiarów
 import androidx.compose.ui.unit.sp // Do wielkości czcionek
 import com.example.batman.ui.theme.BatmanTheme // Twój pakiet motywu
 import androidx.activity.enableEdgeToEdge
-import com.google.accompanist.permissions.ExperimentalPermissionsApi
-import com.google.accompanist.permissions.rememberMultiplePermissionsState
 
 val PrimaryDarkBlue = Color(0xFF0F1A3B) // Tło
 val CardBackground = Color(0xFF1E2746)  // Tło karty
@@ -46,24 +44,11 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun RecordingAppUIScheme() {
-    // 1. Zdefiniuj stan uprawnień, o które prosimy
-    val permissionsState = rememberMultiplePermissionsState(
-        permissions = listOf(
-            Manifest.permission.RECORD_AUDIO,        // Uprawnienie do mikrofonu
-            Manifest.permission.WRITE_EXTERNAL_STORAGE // Uprawnienie do zapisu (może być potrzebne)
-            // Jeśli używasz API 33+ i zapisujesz we własnej przestrzeni, to uprawnienie może nie być potrzebne.
-            // Zostawmy je na razie, aby zapewnić kompatybilność.
-        )
-    )
-
-    // ... (Zmienne stanu isRecording, currentTime, statusText, itd.)
     var isRecording by remember { mutableStateOf(false) }
     var statusText by remember { mutableStateOf("Naciśnij START, aby nagrywać co 5 sekund") }
     var currentTime by remember { mutableStateOf("00:00:00") }
-    // ...
 
     Scaffold( /* ... */ ) { paddingValues ->
 
@@ -76,54 +61,32 @@ fun RecordingAppUIScheme() {
             verticalArrangement = Arrangement.Center // Wyśrodkuj zawartość na ekranie
         ) {
 
-            // --- KLUCZOWA LOGIKA WARUNKOWA ---
-            if (permissionsState.allPermissionsGranted) {
-                // JEŚLI UPRAWNIENIA SĄ UDZIELONE: Pokaż cały Twój interfejs
+            // 1. GÓRNY PASEK STATUSU
+            StatusDisplayCard(
+                status = statusText,
+                time = currentTime,
+                isActive = isRecording
+            )
 
-                // 1. GÓRNY PASEK STATUSU
-                StatusDisplayCard(
-                    status = statusText,
-                    time = currentTime,
-                    isActive = isRecording
-                )
+            Spacer(modifier = Modifier.height(64.dp))
 
-                Spacer(modifier = Modifier.height(64.dp))
-
-                // 2. DUŻY PRZYCISK WŁĄCZAJĄCY/WYŁĄCZAJĄCY
-                PowerSwitchButton(
-                    isRecording = isRecording,
-                    onClick = {
-                        // Logika przełączania stanu
-                        isRecording = !isRecording
-                        statusText = if (isRecording) "Nagrywanie (Co 5s)" else "Gotowy do STARTU"
-                        // TUTAJ BĘDZIE POŁĄCZENIE Z LOGIKĄ OSOBY 2
-                    }
-                )
-
-                Spacer(modifier = Modifier.weight(1f))
-
-                // 3. DOLNY PRZYCISK POWIADOMIEŃ/REJESTRÓW
-                NotificationLogButton(
-                    onClick = { /* Przejście do listy nagrań/powiadomień */ }
-                )
-
-            } else {
-                // JEŚLI UPRAWNIENIA NIE SĄ UDZIELONE: Pokaż prośbę
-
-                Text(
-                    text = "Aplikacja wymaga dostępu do mikrofonu i pamięci, aby działać poprawnie.",
-                    color = Color.White,
-                    modifier = Modifier.padding(24.dp)
-                )
-
-                Button(
-                    onClick = { permissionsState.launchMultiplePermissionRequest() },
-                    modifier = Modifier.padding(top = 16.dp)
-                ) {
-                    Text("Udziel uprawnień")
+            // 2. DUŻY PRZYCISK WŁĄCZAJĄCY/WYŁĄCZAJĄCY
+            PowerSwitchButton(
+                isRecording = isRecording,
+                onClick = {
+                    // Logika przełączania stanu
+                    isRecording = !isRecording
+                    statusText = if (isRecording) "Nagrywanie (Co 5s)" else "Gotowy do STARTU"
+                    // TUTAJ BĘDZIE POŁĄCZENIE Z LOGIKĄ OSOBY 2
                 }
-            }
-            // ------------------------------------
+            )
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            // 3. DOLNY PRZYCISK POWIADOMIEŃ/REJESTRÓW
+            NotificationLogButton(
+                onClick = { /* Przejście do listy nagrań/powiadomień */ }
+            )
         }
     }
 }
