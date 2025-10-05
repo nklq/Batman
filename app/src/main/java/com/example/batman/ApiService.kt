@@ -13,7 +13,9 @@ interface ApiService {
     @POST("/api/recordings/")
     suspend fun uploadRecording(
         @Part file: MultipartBody.Part,
-        @Part("timestamp") timestamp: RequestBody
+        @Part("timestamp") timestamp: RequestBody,
+        @Part("latitude") latitude: RequestBody,
+        @Part("longitude") longitude: RequestBody
     )
 }
 

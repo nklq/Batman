@@ -1,7 +1,9 @@
 package com.example.batman
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Context
+import android.location.Location
 import android.media.MediaRecorder
 import android.os.Bundle
 import android.util.Log
@@ -27,7 +29,8 @@ import androidx.compose.ui.unit.sp
 import com.example.batman.ui.theme.BatmanTheme
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
-import com.google.accompanist.permissions.rememberPermissionState
+import com.google.accompanist.permissions.rememberMultiplePermissionsState
+import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -66,13 +69,31 @@ fun RecordingAppUIScheme() {
     var showFileList by remember { mutableStateOf(false) }
     var fileList by remember { mutableStateOf(listOf<String>()) }
 
-    val recordAudioPermission = rememberPermissionState(Manifest.permission.RECORD_AUDIO)
+    val permissionsState = rememberMultiplePermissionsState(
+        permissions = listOf(
+            Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        )
+    )
     var mediaRecorder by remember { mutableStateOf<MediaRecorder?>(null) }
     val coroutineScope = rememberCoroutineScope()
+    val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+    var lastLocation by remember { mutableStateOf<Location?>(null) }
+
+    @SuppressLint("MissingPermission")
+    fun updateLocation() {
+        if (permissionsState.permissions.any { it.status.isGranted }) {
+            fusedLocationClient.lastLocation.addOnSuccessListener { location: Location? ->
+                lastLocation = location
+            }
+        }
+    }
 
     LaunchedEffect(isRecording) {
         if (isRecording) {
             while (isActive) {
+                updateLocation()
                 val timestamp = System.currentTimeMillis()
                 val fileName = "nagranie_${timestamp}.m4a"
                 val file = File(context.filesDir, fileName)
@@ -96,7 +117,9 @@ fun RecordingAppUIScheme() {
                         val requestFile = file.asRequestBody("audio/m4a".toMediaTypeOrNull())
                         val body = MultipartBody.Part.createFormData("file", file.name, requestFile)
                         val timestampRequestBody = timestamp.toString().toRequestBody("text/plain".toMediaTypeOrNull())
-                        RetrofitClient.instance.uploadRecording(body, timestampRequestBody)
+                        val latitude = (lastLocation?.latitude ?: 0.0).toString().toRequestBody("text/plain".toMediaTypeOrNull())
+                        val longitude = (lastLocation?.longitude ?: 0.0).toString().toRequestBody("text/plain".toMediaTypeOrNull())
+                        RetrofitClient.instance.uploadRecording(body, timestampRequestBody, latitude, longitude)
                         Log.d("FileUpload", "File uploaded successfully: ${file.name}")
                     } catch (e: Exception) {
                         Log.e("FileUpload", "Error uploading file: ${e.message}")
@@ -137,11 +160,11 @@ fun RecordingAppUIScheme() {
             PowerSwitchButton(
                 isRecording = isRecording,
                 onClick = {
-                    if (recordAudioPermission.status.isGranted) {
+                    if (permissionsState.allPermissionsGranted) {
                         isRecording = !isRecording
                         statusText = if (isRecording) "Nagrywanie (Co 5s)" else "Gotowy do STARTU"
                     } else {
-                        recordAudioPermission.launchPermissionRequest()
+                        permissionsState.launchMultiplePermissionRequest()
                     }
                 }
             )
