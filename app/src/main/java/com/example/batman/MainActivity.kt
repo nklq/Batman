@@ -2,7 +2,6 @@ package com.example.batman
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.content.Context
 import android.location.Location
 import android.media.MediaRecorder
 import android.os.Bundle
@@ -39,11 +38,14 @@ import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.background
 
 val PrimaryDarkBlue = Color(0xFF0F1A3B)
 val CardBackground = Color(0xFF1E2746)
-val StatusActiveColor = Color(0xFF00C853)
-val StatusInactiveColor = Color.DarkGray
+val StatusActiveColor = Color(0xFF2B4AA8)
+val RingBorderColor1 = Color(0xFF1B2F6A)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -59,15 +61,16 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@OptIn(ExperimentalPermissionsApi::class)
+@OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun RecordingAppUIScheme() {
     var isRecording by remember { mutableStateOf(false) }
     var statusText by remember { mutableStateOf("Naciśnij START, aby nagrywać co 5 sekund") }
-    var currentTime by remember { mutableStateOf("00:00:00") }
+    var currentTime by remember { mutableStateOf("00:00") }
     val context = LocalContext.current
     var showFileList by remember { mutableStateOf(false) }
     var fileList by remember { mutableStateOf(listOf<String>()) }
+    var elapsedSeconds by remember { mutableStateOf(0) }
 
     val permissionsState = rememberMultiplePermissionsState(
         permissions = listOf(
@@ -92,6 +95,19 @@ fun RecordingAppUIScheme() {
 
     LaunchedEffect(isRecording) {
         if (isRecording) {
+            elapsedSeconds = 0
+            while (isActive) {
+                delay(1000)
+                elapsedSeconds++
+                val minutes = elapsedSeconds / 60
+                val seconds = elapsedSeconds % 60
+                currentTime = String.format("%02d:%02d", minutes, seconds)
+            }
+        }
+    }
+    LaunchedEffect(isRecording) {
+        if (isRecording) {
+            elapsedSeconds = 0
             while (isActive) {
                 updateLocation()
                 val timestamp = System.currentTimeMillis()
@@ -139,7 +155,20 @@ fun RecordingAppUIScheme() {
         FileListScreen(files = fileList, onDismiss = { showFileList = false })
     }
 
-    Scaffold { paddingValues ->
+    Scaffold( topBar = {
+        TopAppBar(
+            title = { Text("Batman", color = Color.White) }, // Nazwa Twojej aplikacji
+            actions = {
+                IconButton(onClick = { /* Opcje Menu */ }) {
+                    Icon(Icons.Filled.Menu, contentDescription = "Menu", tint = Color.White)
+                }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = PrimaryDarkBlue
+            )
+        )
+    },
+        containerColor = PrimaryDarkBlue ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -157,6 +186,17 @@ fun RecordingAppUIScheme() {
 
             Spacer(modifier = Modifier.height(64.dp))
 
+            Box(
+                // Zewnętrzne koło (ramka)
+                modifier = Modifier
+                    .size(260.dp) // WIĘKSZY ROZMIAR dla ramki
+                    .background(
+                        color = RingBorderColor1, // Kolor ramki
+                        shape = CircleShape // Kształt koła
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+
             PowerSwitchButton(
                 isRecording = isRecording,
                 onClick = {
@@ -167,7 +207,7 @@ fun RecordingAppUIScheme() {
                         permissionsState.launchMultiplePermissionRequest()
                     }
                 }
-            )
+            ) }
 
             Spacer(modifier = Modifier.weight(1f))
 
@@ -223,7 +263,7 @@ fun StatusDisplayCard(status: String, time: String, isActive: Boolean) {
         ) {
             Text(
                 text = status.uppercase(),
-                color = if (isActive) StatusActiveColor else StatusInactiveColor,
+                color = Color.LightGray,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -244,15 +284,15 @@ fun PowerSwitchButton(isRecording: Boolean, onClick: () -> Unit) {
         onClick = onClick,
         shape = CircleShape,
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (isRecording) Color.Red else StatusActiveColor
+            containerColor = if (isRecording) Color.LightGray else StatusActiveColor
         ),
         contentPadding = PaddingValues(0.dp),
-        modifier = Modifier.size(160.dp)
+        modifier = Modifier.size(220.dp)
     ) {
         Text(
             text = if (isRecording) "STOP" else "START",
             color = Color.White,
-            fontSize = 24.sp,
+            fontSize = 40.sp,
             fontWeight = FontWeight.Bold
         )
     }
