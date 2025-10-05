@@ -34,6 +34,7 @@ import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
 
 val PrimaryDarkBlue = Color(0xFF0F1A3B)
@@ -72,7 +73,8 @@ fun RecordingAppUIScheme() {
     LaunchedEffect(isRecording) {
         if (isRecording) {
             while (isActive) {
-                val fileName = "nagranie_${System.currentTimeMillis()}.m4a"
+                val timestamp = System.currentTimeMillis()
+                val fileName = "nagranie_${timestamp}.m4a"
                 val file = File(context.filesDir, fileName)
                 mediaRecorder = MediaRecorder(context).apply {
                     setAudioSource(MediaRecorder.AudioSource.MIC)
@@ -93,7 +95,8 @@ fun RecordingAppUIScheme() {
                     try {
                         val requestFile = file.asRequestBody("audio/m4a".toMediaTypeOrNull())
                         val body = MultipartBody.Part.createFormData("file", file.name, requestFile)
-                        RetrofitClient.instance.uploadRecording(body)
+                        val timestampRequestBody = timestamp.toString().toRequestBody("text/plain".toMediaTypeOrNull())
+                        RetrofitClient.instance.uploadRecording(body, timestampRequestBody)
                         Log.d("FileUpload", "File uploaded successfully: ${file.name}")
                     } catch (e: Exception) {
                         Log.e("FileUpload", "Error uploading file: ${e.message}")

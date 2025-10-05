@@ -1,6 +1,7 @@
 package com.example.batman
 
 import okhttp3.MultipartBody
+import okhttp3.RequestBody
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.Multipart
@@ -10,7 +11,10 @@ import retrofit2.http.Part
 interface ApiService {
     @Multipart
     @POST("/api/recordings/")
-    suspend fun uploadRecording(@Part file: MultipartBody.Part)
+    suspend fun uploadRecording(
+        @Part file: MultipartBody.Part,
+        @Part("timestamp") timestamp: RequestBody
+    )
 }
 
 object RetrofitClient {
